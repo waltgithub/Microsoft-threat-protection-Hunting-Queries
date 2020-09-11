@@ -1,0 +1,17 @@
+// *Disclaimer*
+// This is a sample query to find systems without the latest x versions of av signature files, which can be used to track compliance.
+// The goal is to determine which systems are not protected by having one of the latest signature files.
+// For example, by changing the SigVersionCount to "2", the query will return a list of systems without one of the latest two signature file versions.
+let SigVersionCount = 2; // The latest 'X' versions of signatures to filter out
+let AVSigData = (
+    DeviceTvmSecureConfigurationAssessment
+    | where ConfigurationId == "scid-2011" and isnotempty(Context)
+    | extend avdata=parsejson(Context)
+    | extend AVSigVersion = tostring(avdata[0][0]) //  Given this is a dynamic array, we can just take the 0th result from the 0th member
+    | summarize arg_max(Timestamp, AVSigVersion) by DeviceId, DeviceName // This ensures we get the latest check-in AV signature version
+);
+AVSigData
+| summarize max(Timestamp) by AVSigVersion // Get the most recent timestamps for each AV version.
+| top SigVersionCount by max_Timestamp desc // Filter to only the X most recent versions
+| join kind=rightanti AVSigData on AVSigVersion // Filter AVSigData to remove anything matching this version
+| order by AVSigVersion //Sort by the AVSigVersion
